@@ -1,48 +1,19 @@
+import os
 import numpy as np
-from Realsense.realsense_depth import *
-from Realsense.realsense import *
+# from Realsense.realsense_depth import *
+# from Realsense.realsense import *
 import cv2
 import torch
 
 
 
 class Camera:
-    def __init__(self, use_depth_camera):
-        self.use_depth_camera = use_depth_camera
-        if use_depth_camera:
-            self.pipeline = rs.pipeline()
-            config = rs.config()
-
-            config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)            
-
-            self.pipeline.start(config)
-        else:
-            self.camera = cv2.VideoCapture(0)
-
-    def __del__(self):
-        if self.use_depth_camera:
-            self.camera.release()
+    def __init__(self,x_size, y_size, hFOV, vFOV):
+        self.camera = cv2.VideoCapture(0)
+        self.x_size, self.y_size, self.hFOV, self.vFOV = x_size, y_size, hFOV,vFOV
 
     def get_current_frame(self):
-        if self.use_depth_camera:
-            try:
-                frames = self.pipeline.wait_for_frames()
-            except:
-                return False, None, None
-                
-            depth_frame = frames.get_depth_frame()
-            color_frame = frames.get_color_frame()
-
-            depth_image = np.asanyarray(depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
-
-            if not depth_frame or not color_frame:
-                return False, None, None
-
-            return True, depth_image, color_image
-        else:
-            return True, None, self.camera.read()[1]
+        return True, self.camera.read()[1]
 
 
 class TorchModel:
@@ -63,9 +34,8 @@ class TorchModel:
 
 
 class Detect:
-    def __init__(self, use_depth_camera = False):
-        self.use_depth_camera = use_depth_camera
-        self.camera = Camera(use_depth_camera)
+    def __init__(self):
+        self.camera = Camera(x_size=640, y_size=480, hFOV = 60, vFOV = 50) # Actual fovs unknown, these are good estimates
         self.model = TorchModel()
     
     def add_bounding_box(self, color_image, bbxs, label, conf):
@@ -74,14 +44,13 @@ class Detect:
         cv2.rectangle(color_image, (int(x_min), int(y_min)), (int( x_max), int(y_max)), (0, 255, 0), 2) 
         return color_image
 
-    def add_depth_label(self, color_image, bbxs, depth):
+    def add_offset_data(self, color_image, bbxs, offsets):
 
         x_min, y_min, x_max, y_max = bbxs
-        cv2.putText(color_image, "Depth: " + str(depth), (int(x_min), int(y_min)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        offsets = "(%.2f, %.2f)" % (offsets[0],offsets[1])
+        cv2.putText(color_image, "Offset: " + str(offsets), (int(x_min), int(y_min)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         return color_image
-
-
 
 
     def is_blue(self, color_frame):
@@ -112,7 +81,19 @@ class Detect:
 
         return True
 
-    def process_frame(self, color_image, depth_image):
+    def get_angle_offsets(self, coords):
+        x,y = coords
+        y = self.camera.y_size - y
+        
+        center_x, center_y = self.camera.x_size/2.0, self.camera.y_size/2.0
+
+        hort_offset = (x-center_x) / center_x * (self.camera.hFOV / 2)
+        vert_offset = (y-center_y) / center_y * (self.camera.vFOV / 2)
+        
+        return(hort_offset, vert_offset)
+
+
+    def process_frame(self, color_image):
 
         detections = self.model.get_detections(color_image)
 
@@ -125,17 +106,15 @@ class Detect:
                     color_image = self.add_bounding_box(color_image, bbox, label, conf)       
 
                     coords = (int((x_min + x_max) // 2), int((y_min + y_max) // 2))
-                    if self.use_depth_camera:
-                        color_image = self.add_depth_label(color_image,bbox,depth_image[coords[1],coords[0]])
-                    else:
-                        color_image = self.add_depth_label(color_image,bbox,"N/A")
+                    
+                    color_image = self.add_offset_data(color_image,bbox, self.get_angle_offsets(coords))
 
         return color_image
 
     def detect_pipeline(self):
         while True:
             try:
-                ret, depth_image, color_image = self.camera.get_current_frame()
+                ret, color_image = self.camera.get_current_frame()
             except:
                 print("Error getting frame")
 
@@ -144,9 +123,10 @@ class Detect:
                 if key == 27:
                     break
 
-                frame = self.process_frame(color_image=color_image, depth_image = depth_image)
+                frame = self.process_frame(color_image=color_image)
                 cv2.imshow('RealSense', frame)
                 cv2.waitKey(1)
+                #6:35
 
 
 pipeline = Detect()

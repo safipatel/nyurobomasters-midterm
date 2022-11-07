@@ -8,7 +8,7 @@
     - This makes more sense since there could be a lot of other noise within the frame that doesn't have a bearing on the color of that specifically detected plate.
 
 ### Screenshot for Prompt 1:
-![Prompt1](/images/prompt1.jpg)
+![Prompt1](/screenshots/prompt1.jpg)
 
 
 ## Prompt 2
@@ -20,16 +20,18 @@
     - The first number is the horizontal offset in degrees and the second number is the vertical offset.
 
 ### Screenshot for Prompt 2:
-![Prompt2](/images/prompt2.jpg)
+![Prompt2](/screenshots/prompt2.jpg)
 
 ## Prompt 3
 - For the SystemD prompt, I first created the startup scripts. These can be found in the `scripts` folder within this repository, but they were placed in the home directory on my computer.
     - The first startup script was `startup.sh`. This is what actually gets called by SystemD service. We need this in order to activate the conda environment before actually running the python script.
     - the second startup script was `startup.py`. This is the python file the script file ends up calling to print the PyTorch version number.
 - Then, I had to make the service file which called the `startup.sh` file.
+    - I chose the service type of simple because it made sense to use it for just launching a single python file and having it potentially keep running if we had a program that needed to. One-shot and the other types didn't make as much sense.
+    - The launch after statements are used if there are dependencies involved. I don't think I need one here since the `startup.sh` file takes care of activating the conda file before doing anything else.
 - We can see all the services listed, including mine, after I had created the service file:
-![Unit List](/images/unit-list.png)
+![Unit List](/screenshots/unit-list.png)
 - Then I ran the commands to enable the service: 
-![Unit List Enabled](/images/unit-list-enabled.png)
+![Unit List Enabled](/screenshots/unit-list-enabled.png)
 - After, I ran the command to start the service, I could see that it succeeded through either looking at the service status or through journalctl:
-![Success](/images/system-success.png)
+![Success](/screenshots/system-success.png)

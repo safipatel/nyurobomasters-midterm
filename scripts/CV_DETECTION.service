@@ -1,0 +1,10 @@
+[Unit]
+Description=Prints PyTorch Version on startup
+
+[Service]
+Type=simple
+WorkingDirectory=/home/azureuser/systemd/
+ExecStart=/home/azureuser/systemd/startup.sh
+
+[Install]
+WantedBy=default.target
